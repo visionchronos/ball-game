@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bouncing Balls — Enhanced JavaScript Game</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    :root{
+      --bg:#0b1020;
+      --card:#0f1724;
+      --accent:#ffd166;
+      --accent-hover:#ffbf3d;
+      --text:#e6eef8;
+      --ball:#FFD166;
+      --bucket:#60A5FA;
+    }
+    
+    *{box-sizing:border-box;margin:0;padding:0}
+    
+    body{
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+      color:var(--text);
+      background:linear-gradient(180deg,#071028 0%, #07192e 100%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      padding:20px;
+    }
+    
+    .wrap{
+      width:900px;
+      max-width:100%;
+      background:rgba(255,255,255,0.04);
+      padding:24px;
+      border-radius:16px;
+      box-shadow:0 12px 40px rgba(2,6,23,0.7);
+      backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.06);
+    }
+    
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:16px;
+      flex-wrap:wrap;
+      gap:12px;
+    }
+    
+    h1{
+      font-size:20px;
+      font-weight:700;
+      margin:0;
+      letter-spacing:-0.3px;
+    }
+    
+    .controls{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    
+    button{
+      background:var(--accent);
+      border:none;
+      padding:10px 16px;
+      border-radius:8px;
+      font-weight:600;
+      cursor:pointer;
+      color:#1a1a1a;
+      font-size:14px;
+      transition:all 0.2s ease;
+      font-family:inherit;
+    }
+    
+    button:hover{
+      background:var(--accent-hover);
+      transform:translateY(-1px);
+      box-shadow:0 4px 12px rgba(255,209,102,0.3);
+    }
+    
+    button:active{
+      transform:translateY(0);
+    }
+    
+    button:disabled{
+      opacity:0.5;
+      cursor:not-allowed;
+      transform:none;
+    }
+    
+    canvas{
+      display:block;
+      width:100%;
+      height:480px;
+      background:linear-gradient(180deg,#071028,#0b2238);
+      border-radius:12px;
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,0.08);
+      box-shadow:inset 0 2px 8px rgba(0,0,0,0.3);
+    }
+    
+    .hud{
+      display:flex;
+      gap:20px;
+      align-items:center;
+      background:rgba(255,255,255,0.05);
+      padding:8px 16px;
+      border-radius:8px;
+    }
+    
+    .hud div{
+      font-size:14px;
+      font-weight:600;
+    }
+    
+    .hud span{
+      color:var(--accent);
+      font-weight:700;
+    }
+    
+    footer{
+      margin-top:14px;
+      font-size:14px;
+      color:rgba(230,238,248,0.7);
+      text-align:center;
+      line-height:1.6;
+    }
+    
+    footer a{
+      color:var(--accent);
+      text-decoration:none;
+      transition:opacity 0.2s;
+    }
+    
+    footer a:hover{
+      opacity:0.8;
+      text-decoration:underline;
+    }
+    
+    @media (max-width: 640px){
+      .wrap{padding:16px}
+      h1{font-size:16px}
+      header{flex-direction:column;align-items:stretch}
+      .controls{justify-content:center}
+      .hud{gap:12px;font-size:13px}
+      canvas{height:360px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎮 Bouncing Balls Game</h1>
+      <div class="controls">
+        <div class="hud">
+          <div>Score: <span id="score">0</span></div>
+          <div>Lives: <span id="lives">3</span></div>
+          <div>Level: <span id="level">1</span></div>
+        </div>
+        <button id="startBtn">Start Game</button>
+        <button id="pauseBtn" disabled>Pause</button>
+      </div>
+    </header>
+
+    <canvas id="game" width="800" height="480"></canvas>
+    
+    <footer>
+      <strong>Controls:</strong> Use ← → arrow keys or A/D to move, or click/drag with mouse/touch.<br>
+      Catch bouncing balls to score points. Miss 3 balls and it's game over!
+    </footer>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const livesEl = document.getElementById('lives');
+  const levelEl = document.getElementById('level');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+
+  const W = canvas.width;
+  const H = canvas.height;
+
+  let gameState = 'stopped'; // 'running', 'paused', 'gameover'
+  let score = 0;
+  let lives = 3;
+  let level = 1;
+  let balls = [];
+  let bucket = { x: W/2 - 50, y: H - 40, w: 100, h: 20, speed: 7 };
+  let keys = {};
+  let lastSpawn = 0;
+  let spawnInterval = 1200;
+  let speedFactor = 1;
+  let particles = [];
+
+  function reset(){
+    score = 0;
+    lives = 3;
+    level = 1;
+    balls = [];
+    particles = [];
+    bucket.x = W/2 - bucket.w/2;
+    spawnInterval = 1200;
+    speedFactor = 1;
+    lastSpawn = 0;
+    updateHUD();
+  }
+
+  function updateHUD(){
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+    levelEl.textContent = level;
+  }
+
+  function spawnBall(){
+    const r = 12 + Math.random() * 12;
+    const x = Math.random() * (W - r * 2) + r;
+    const speedY = (2 + Math.random() * 1.5) * (1 + (level - 1) * 0.12) * speedFactor;
+    const speedX = (Math.random() * 2 - 1) * 1.5;
+    const hue = Math.random() * 60 + 30; // Yellow-orange range
+    balls.push({ x, y: r, r, vx: speedX, vy: speedY, hue });
+  }
+
+  function createParticles(x, y, color){
+    for(let i = 0; i < 8; i++){
+      const angle = (Math.PI * 2 * i) / 8;
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * 3,
+        vy: Math.sin(angle) * 3,
+        life: 1,
+        color
+      });
+    }
+  }
+
+  function update(dt){
+    const frameDt = Math.min(dt, 32); // Cap delta time
+    
+    // Spawn balls
+    lastSpawn += frameDt;
+    if(lastSpawn > spawnInterval){
+      spawnBall();
+      lastSpawn = 0;
+    }
+
+    // Bucket movement
+    const moveSpeed = bucket.speed;
+    if(keys.ArrowLeft || keys.KeyA) bucket.x -= moveSpeed;
+    if(keys.ArrowRight || keys.KeyD) bucket.x += moveSpeed;
+    bucket.x = Math.max(0, Math.min(W - bucket.w, bucket.x));
+
+    // Update particles
+    for(let i = particles.length - 1; i >= 0; i--){
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.02;
+      if(p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Update balls
+    for(let i = balls.length - 1; i >= 0; i--){
+      const b = balls[i];
+      b.x += b.vx;
+      b.y += b.vy * (frameDt / 16);
+
+      // Bounce left/right walls
+      if(b.x - b.r < 0){
+        b.x = b.r;
+        b.vx *= -0.8;
+      }
+      if(b.x + b.r > W){
+        b.x = W - b.r;
+        b.vx *= -0.8;
+      }
+
+      // Bounce top
+      if(b.y - b.r < 0){
+        b.y = b.r;
+        b.vy *= -0.8;
+      }
+
+      // Collision with bucket
+      if(b.vy > 0 &&
+         b.y + b.r >= bucket.y &&
+         b.y - b.r < bucket.y + bucket.h &&
+         b.x + b.r >= bucket.x &&
+         b.x - b.r <= bucket.x + bucket.w){
+        
+        const points = Math.round(10 + b.r * 0.8);
+        score += points;
+        b.vy *= -1.1; // Bounce with extra energy
+        b.y = bucket.y - b.r;
+        
+        // Add horizontal velocity based on where it hit the bucket
+        const hitPos = (b.x - bucket.x) / bucket.w;
+        b.vx += (hitPos - 0.5) * 3;
+        
+        createParticles(b.x, b.y, `hsl(${b.hue}, 100%, 60%)`);
+        updateHUD();
+        
+        // Level up
+        if(score >= level * 100){
+          level++;
+          spawnInterval = Math.max(400, spawnInterval - 100);
+          speedFactor += 0.1;
+          updateHUD();
+        }
+      }
+
+      // Missed (ball hits bottom)
+      if(b.y - b.r > H){
+        balls.splice(i, 1);
+        lives--;
+        updateHUD();
+        if(lives <= 0){
+          gameOver();
+        }
+      }
+    }
+  }
+
+  function drawBall(x, y, r, hue){
+    const gradient = ctx.createRadialGradient(x - r/3, y - r/3, 0, x, y, r);
+    gradient.addColorStop(0, `hsl(${hue}, 100%, 75%)`);
+    gradient.addColorStop(1, `hsl(${hue}, 100%, 50%)`);
+    
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Highlight
+    ctx.beginPath();
+    ctx.arc(x - r/3, y - r/3, r/3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fill();
+  }
+
+  function render(){
+    // Clear with gradient background
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
+    bgGradient.addColorStop(0, '#071028');
+    bgGradient.addColorStop(1, '#0b2238');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, W, H);
+
+    // Draw particles
+    for(const p of particles){
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Draw balls
+    for(const b of balls){
+      drawBall(b.x, b.y, b.r, b.hue);
+    }
+
+    // Draw bucket with gradient
+    const bucketGradient = ctx.createLinearGradient(bucket.x, bucket.y, bucket.x, bucket.y + bucket.h);
+    bucketGradient.addColorStop(0, '#60A5FA');
+    bucketGradient.addColorStop(1, '#3B82F6');
+    
+    ctx.fillStyle = bucketGradient;
+    roundRect(ctx, bucket.x, bucket.y, bucket.w, bucket.h, 10, true);
+    
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function roundRect(ctx, x, y, w, h, r, fill){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if(fill) ctx.fill();
+  }
+
+  let lastTime = performance.now();
+  
+  function loop(now){
+    if(gameState === 'running'){
+      const dt = now - lastTime;
+      update(dt);
+      render();
+    } else if(gameState === 'stopped'){
+      render();
+    }
+    lastTime = now;
+    requestAnimationFrame(loop);
+  }
+
+  function startGame(){
+    if(gameState === 'stopped' || gameState === 'gameover'){
+      reset();
+    }
+    gameState = 'running';
+    startBtn.textContent = 'Restart';
+    pauseBtn.textContent = 'Pause';
+    pauseBtn.disabled = false;
+    lastTime = performance.now();
+  }
+
+  function pauseGame(){
+    if(gameState === 'running'){
+      gameState = 'paused';
+      pauseBtn.textContent = 'Resume';
+      
+      // Draw pause overlay
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 32px Inter, Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('PAUSED', W/2, H/2);
+    } else if(gameState === 'paused'){
+      gameState = 'running';
+      pauseBtn.textContent = 'Pause';
+      lastTime = performance.now();
+    }
+  }
+
+  function gameOver(){
+    gameState = 'gameover';
+    pauseBtn.disabled = true;
+    
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 36px Inter, Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', W/2, H/2 - 30);
+    
+    ctx.font = '20px Inter, Arial';
+    ctx.fillText('Final Score: ' + score, W/2, H/2 + 10);
+    ctx.fillText('Level Reached: ' + level, W/2, H/2 + 40);
+    
+    startBtn.textContent = 'Play Again';
+  }
+
+  // Keyboard controls
+  window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if(e.code === 'Space' && gameState !== 'running'){
+      startGame();
+    }
+    if(e.code === 'Escape' && gameState === 'running'){
+      pauseGame();
+    }
+  });
+  
+  window.addEventListener('keyup', e => {
+    keys[e.code] = false;
+  });
+
+  // Mouse/touch controls
+  let dragging = false;
+  
+  canvas.addEventListener('mousedown', e => {
+    dragging = true;
+    moveBucketTo(e.clientX);
+  });
+  
+  window.addEventListener('mouseup', () => dragging = false);
+  
+  window.addEventListener('mousemove', e => {
+    if(dragging) moveBucketTo(e.clientX);
+  });
+  
+  canvas.addEventListener('touchstart', e => {
+    dragging = true;
+    moveBucketTo(e.touches[0].clientX);
+    e.preventDefault();
+  }, {passive: false});
+  
+  window.addEventListener('touchend', () => dragging = false);
+  
+  window.addEventListener('touchmove', e => {
+    if(dragging){
+      moveBucketTo(e.touches[0].clientX);
+      e.preventDefault();
+    }
+  }, {passive: false});
+
+  function moveBucketTo(clientX){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const x = (clientX - rect.left) * scaleX - bucket.w / 2;
+    bucket.x = Math.max(0, Math.min(W - bucket.w, x));
+  }
+
+  // Button event listeners
+  startBtn.addEventListener('click', startGame);
+  pauseBtn.addEventListener('click', pauseGame);
+
+  // Initial render
+  render();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
